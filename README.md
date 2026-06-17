@@ -20,8 +20,8 @@ user prompt
 - Includes two tools:
   - `read_file`: read UTF-8 text files inside the project workspace.
   - `web_search`: search the web and return compact snippets.
-- Prints agent loop logs so you can see when the model asks for a tool.
-- Asks for terminal approval before running a requested tool.
+- Can print agent loop logs with `--verbose` so you can see when the model asks for a tool.
+- Asks for terminal approval before running a requested tool by default.
 - Includes a small `unittest` test suite for the core loop.
 
 ## Setup
@@ -46,6 +46,20 @@ set +a
 
 ## Run
 
+Install the local CLI commands from the project root:
+
+```bash
+/Users/lyk/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3 -m pip install -e .
+```
+
+Start the interactive terminal interface:
+
+```bash
+cloud code
+```
+
+Inside the interface, type a prompt and press Enter. Type `/exit` or `/quit` to stop.
+
 From the project root:
 
 ```bash
@@ -67,10 +81,36 @@ Agent wants to run a tool:
 Allow? [y/N]
 ```
 
+Print agent loop logs while running:
+
+```bash
+PYTHONPATH=src /Users/lyk/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3 -m mini_agent_harness.main --verbose "请读取 pyproject.toml，并总结这个项目是什么"
+```
+
+Skip terminal approval when you already trust the requested tools:
+
+```bash
+PYTHONPATH=src /Users/lyk/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3 -m mini_agent_harness.main --no-approval "请读取 pyproject.toml，并总结这个项目是什么"
+```
+
+Limit the number of model/tool loop steps:
+
+```bash
+PYTHONPATH=src /Users/lyk/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3 -m mini_agent_harness.main --max-steps 2 "请读取 pyproject.toml，并总结这个项目是什么"
+```
+
 ## Test
 
 ```bash
 PYTHONPATH=src /Users/lyk/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3 -m unittest discover -s tests
+```
+
+## CI
+
+GitHub Actions runs the same unit test suite on pushes to `main` and on pull requests:
+
+```bash
+python -m unittest discover -s tests
 ```
 
 ## How It Works
@@ -80,7 +120,7 @@ PYTHONPATH=src /Users/lyk/.local/share/uv/python/cpython-3.11.15-macos-aarch64-n
 - `model_client.py` talks to the model API.
 - `tool.py` defines the tool interface.
 - `tools.py` implements concrete tools.
-- `agent.py` controls the agent loop.
+- `agent.py` controls the agent loop, including the `max_steps` safety limit.
 
 The current tool-calling protocol is intentionally simple. Instead of relying on provider-native `tools` support, the model is asked to output JSON when it wants a tool:
 

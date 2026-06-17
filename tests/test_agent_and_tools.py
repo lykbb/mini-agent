@@ -5,6 +5,7 @@ import tempfile
 import unittest
 
 from mini_agent_harness.agent import Agent
+from mini_agent_harness.main import parse_args
 from mini_agent_harness.model_client import ModelResponse
 from mini_agent_harness.tools import ReadFileTool, ToolExecutionError
 
@@ -93,6 +94,36 @@ class AgentLoopTests(unittest.TestCase):
             self.assertEqual(client.calls, 2)
             self.assertIn("Tool read_file was denied by the user.", client.last_messages[-1]["content"])
             self.assertNotIn("hello", client.last_messages[-1]["content"])
+
+
+class CliArgumentTests(unittest.TestCase):
+    def test_cli_defaults_to_approval_and_quiet_logs(self) -> None:
+        args = parse_args(["hello"])
+
+        self.assertEqual(args.prompt, ["hello"])
+        self.assertFalse(args.verbose)
+        self.assertFalse(args.no_approval)
+        self.assertEqual(args.max_steps, 5)
+
+    def test_cli_accepts_verbose_and_no_approval(self) -> None:
+        args = parse_args(["--verbose", "--no-approval", "--max-steps", "2", "read", "file"])
+
+        self.assertEqual(args.prompt, ["read", "file"])
+        self.assertTrue(args.verbose)
+        self.assertTrue(args.no_approval)
+        self.assertEqual(args.max_steps, 2)
+
+    def test_cli_prompt_is_optional_for_interactive_mode(self) -> None:
+        args = parse_args([])
+
+        self.assertEqual(args.prompt, [])
+        self.assertEqual(args.max_steps, 5)
+
+    def test_cloud_code_command_enters_agent_interface(self) -> None:
+        args = parse_args(["code"], prog="cloud", require_code_command=True)
+
+        self.assertEqual(args.command, "code")
+        self.assertEqual(args.prompt, [])
 
 
 if __name__ == "__main__":
