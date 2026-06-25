@@ -16,7 +16,7 @@ user prompt
 
 - Reads model settings from environment variables.
 - Calls an OpenAI-compatible chat completion API.
-- Supports a simple JSON-based tool calling protocol.
+- Supports OpenAI-compatible native `tools` / `tool_calls`.
 - Includes two tools:
   - `read_file`: read UTF-8 text files inside the project workspace.
   - `web_search`: search the web and return compact snippets.
@@ -36,7 +36,7 @@ TEMPERATURE=0.7
 MAX_TOKENS=4096
 ```
 
-Load the environment variables in your current terminal:
+The CLI automatically reads `.env` from the current project directory. You can also load it into your terminal manually if you prefer:
 
 ```bash
 set -a
@@ -55,10 +55,26 @@ Install the local CLI commands from the project root:
 Start the interactive terminal interface:
 
 ```bash
-cloud code
+minicode
 ```
 
 Inside the interface, type a prompt and press Enter. Type `/exit` or `/quit` to stop.
+
+Each interactive session writes a local JSON record under:
+
+```text
+src/conversations/
+```
+
+Session files are named by date and sequence number, for example:
+
+```text
+src/conversations/2026-06-22-001.json
+```
+
+Session records include prompts, final answers, errors, model name, and base URL. They do not include the API key and are ignored by Git.
+
+During one `minicode` session, successful previous turns are also sent back to the model as short-term session memory. This memory is session-scoped, not long-term memory.
 
 From the project root:
 
@@ -122,10 +138,6 @@ python -m unittest discover -s tests
 - `tools.py` implements concrete tools.
 - `agent.py` controls the agent loop, including the `max_steps` safety limit.
 
-The current tool-calling protocol is intentionally simple. Instead of relying on provider-native `tools` support, the model is asked to output JSON when it wants a tool:
+The current tool-calling protocol uses OpenAI-compatible native `tools` / `tool_calls`. The agent sends tool schemas to the model API, executes requested tool calls locally, sends the tool result back with `role: "tool"`, and then asks the model for the final answer.
 
-```json
-{"tool": "read_file", "arguments": {"path": "pyproject.toml"}}
-```
-
-The agent parses that JSON, asks for terminal approval, executes the matching tool when approved, sends the tool result back to the model, and returns the final answer.
+The old JSON text protocol is kept only as a compatibility fallback for models that do not return native `tool_calls`.

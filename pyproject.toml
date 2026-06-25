@@ -6,8 +6,7 @@ requires-python = ">=3.11"
 dependencies = []
 
 [project.scripts]
-cloud = "mini_agent_harness.main:cloud_main"
-mini-agent = "mini_agent_harness.main:main"
+minicode = "mini_agent_harness.main:minicode_main"
 
 [build-system]
 requires = ["setuptools>=68"]

@@ -5,6 +5,7 @@ from pathlib import Path
 from mini_agent_harness.agent import Agent, AgentError
 from mini_agent_harness.config import load_settings
 from mini_agent_harness.model_client import ModelClientError, OpenAICompatibleClient, ToolCall
+from mini_agent_harness.session_recorder import SessionRecorder
 from mini_agent_harness.tools import get_default_tools
 
 
@@ -22,7 +23,6 @@ def parse_args(
     argv: list[str] | None = None,
     *,
     prog: str = "mini-agent",
-    require_code_command: bool = False,
 ) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog=prog)
     parser.add_argument(
@@ -41,8 +41,6 @@ def parse_args(
         default=5,
         help="Maximum number of model/tool loop steps before stopping.",
     )
-    if require_code_command:
-        parser.add_argument("command", choices=["code"], help="Start the agent chat interface.")
     parser.add_argument("prompt", nargs="*", help="The prompt to send to the agent.")
     return parser.parse_args(argv)
 
@@ -55,9 +53,9 @@ def confirm_tool_call(tool_call: ToolCall) -> bool:
     return answer == "y"
 
 
-def build_agent(args: argparse.Namespace) -> Agent:
+def build_agent(args: argparse.Namespace, settings=None) -> Agent:
     print("Agent started")
-    settings = load_settings()
+    settings = settings or load_settings()
     print(f"Model: {settings.model_name}")
     print(f"Base URL: {settings.openai_base_url}")
     print(f"API key configured: {settings.has_api_key}")
@@ -74,21 +72,27 @@ def build_agent(args: argparse.Namespace) -> Agent:
     )
 
 
-def run_once(agent: Agent, prompt: str) -> None:
+def run_once(
+    agent: Agent,
+    prompt: str,
+    history: list[dict[str, str]] | None = None,
+) -> tuple[str | None, str | None]:
     try:
-        answer = agent.run(prompt)
+        answer = agent.run(prompt, history=history)
     except (AgentError, ModelClientError) as exc:
-        print(f"Agent error: {exc}")
-        return
+        error = f"Agent error: {exc}"
+        print(error)
+        return None, error
 
     print(answer)
+    return answer, None
 
 
-def run_interactive(agent: Agent) -> None:
+def run_interactive(agent: Agent, recorder: SessionRecorder | None = None, *, prompt_label: str = "mini-agent") -> None:
     print("Enter a prompt. Type /exit or /quit to stop.")
     while True:
         try:
-            prompt = input("mini-agent> ").strip()
+            prompt = input(f"{prompt_label}> ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
             return
@@ -98,26 +102,39 @@ def run_interactive(agent: Agent) -> None:
         if prompt in {"/exit", "/quit"}:
             return
 
-        run_once(agent, prompt)
+        history = recorder.model_history() if recorder is not None else None
+        answer, error = run_once(agent, prompt, history=history)
+        if recorder is not None:
+            recorder.record_turn(user=prompt, assistant=answer, error=error)
 
 
-def run_cli(argv: list[str] | None = None, *, prog: str = "mini-agent", require_code_command: bool = False) -> None:
-    args = parse_args(argv, prog=prog, require_code_command=require_code_command)
-    agent = build_agent(args)
+def run_cli(argv: list[str] | None = None, *, prog: str = "mini-agent") -> None:
+    args = parse_args(argv, prog=prog)
+    settings = load_settings()
+    agent = build_agent(args, settings)
     prompt = " ".join(args.prompt)
     if prompt:
         run_once(agent, prompt)
         return
 
-    run_interactive(agent)
+    recorder = SessionRecorder.start(
+        Path.cwd(),
+        command=prog,
+        settings=settings,
+        max_steps=args.max_steps,
+        verbose=args.verbose,
+        require_approval=not args.no_approval,
+    )
+    print(f"Session log: {recorder.path}")
+    run_interactive(agent, recorder, prompt_label=prog)
 
 
 def main(argv: list[str] | None = None) -> None:
     run_cli(argv, prog="mini-agent")
 
 
-def cloud_main(argv: list[str] | None = None) -> None:
-    run_cli(argv, prog="cloud", require_code_command=True)
+def minicode_main(argv: list[str] | None = None) -> None:
+    run_cli(argv, prog="minicode")
 
 
 if __name__ == "__main__":

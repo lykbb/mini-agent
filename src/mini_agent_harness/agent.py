@@ -11,9 +11,7 @@ from mini_agent_harness.tools import ToolExecutionError
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a helpful mini agent. Use the available tools when they are useful. "
-    "If you need a tool, respond with only JSON in this exact shape: "
-    '{"tool": "tool_name", "arguments": {"key": "value"}}. '
-    "Available tools are read_file(path) and web_search(query, max_results). "
+    "The application will provide tool definitions through the model API. "
     "After a tool result is provided, answer the user clearly and concisely."
 )
 
@@ -36,16 +34,18 @@ class Agent:
     tool_result_preview_chars: int = 500
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
 
-    def run(self, prompt: str) -> str:
+    def run(self, prompt: str, history: list[dict[str, Any]] | None = None) -> str:
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": prompt},
         ]
+        if history:
+            messages.extend(history)
+        messages.append({"role": "user", "content": prompt})
 
         self._log("Agent loop started")
         for step in range(1, self.max_steps + 1):
             self._log(f"Step {step}: asking model")
-            response = self.client.chat(messages)
+            response = self.client.chat(messages, tools=self.tools)
             manual_tool_call = self._parse_manual_tool_call(response.content)
             if not response.tool_calls and manual_tool_call is None:
                 self._log("Model returned final answer")
