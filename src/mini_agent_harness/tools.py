@@ -17,7 +17,7 @@ class ToolExecutionError(RuntimeError):
 
 @dataclass
 class ReadFileTool(Tool):
-    workspace_root: Path
+    workspace_roots: list[Path]
     max_chars: int = 12_000
 
     name = "read_file"
@@ -27,7 +27,7 @@ class ReadFileTool(Tool):
         "properties": {
             "path": {
                 "type": "string",
-                "description": "A file path inside the project workspace, such as README.md.",
+                "description": "Absolute file path, such as /Users/lyk/Project/test/README.md.",
             }
         },
         "required": ["path"],
@@ -39,31 +39,90 @@ class ReadFileTool(Tool):
         if not isinstance(raw_path, str) or not raw_path.strip():
             raise ToolExecutionError("read_file requires a non-empty string path.")
 
-        workspace_root = self.workspace_root.resolve()
         requested_path = Path(raw_path)
-        if requested_path.is_absolute():
-            file_path = requested_path.resolve()
-        else:
-            file_path = (workspace_root / requested_path).resolve()
+        resolved_roots = [root.resolve() for root in self.workspace_roots]
 
-        try:
-            file_path.relative_to(workspace_root)
-        except ValueError as exc:
-            raise ToolExecutionError("read_file can only read files inside the workspace.") from exc
+        # Try each workspace root
+        for root in resolved_roots:
+            if requested_path.is_absolute():
+                file_path = requested_path.resolve()
+            else:
+                file_path = (root / requested_path).resolve()
 
-        if not file_path.exists():
-            raise ToolExecutionError(f"File does not exist: {raw_path}")
-        if not file_path.is_file():
-            raise ToolExecutionError(f"Path is not a file: {raw_path}")
+            try:
+                file_path.relative_to(root)
+            except ValueError:
+                continue
 
-        try:
-            content = file_path.read_text(encoding="utf-8")
-        except UnicodeDecodeError as exc:
-            raise ToolExecutionError(f"File is not valid UTF-8 text: {raw_path}") from exc
+            if not file_path.exists():
+                raise ToolExecutionError(f"File does not exist: {raw_path}")
+            if not file_path.is_file():
+                raise ToolExecutionError(f"Path is not a file: {raw_path}")
 
-        if len(content) > self.max_chars:
-            return content[: self.max_chars] + "\n\n[Output truncated]"
-        return content
+            try:
+                content = file_path.read_text(encoding="utf-8")
+            except UnicodeDecodeError as exc:
+                raise ToolExecutionError(f"File is not valid UTF-8 text: {raw_path}") from exc
+
+            if len(content) > self.max_chars:
+                return content[: self.max_chars] + "\n\n[Output truncated]"
+            return content
+
+        raise ToolExecutionError("read_file can only read files inside the workspace.")
+
+
+@dataclass
+class ListDirectoryTool(Tool):
+    workspace_roots: list[Path]
+
+    name = "list_directory"
+    description = "List files and folders inside a directory."
+    parameters = {
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "Absolute directory path, such as /Users/lyk/Project/test.",
+            }
+        },
+        "required": ["path"],
+        "additionalProperties": False,
+    }
+
+    def run(self, arguments: dict[str, Any]) -> str:
+        raw_path = arguments.get("path")
+        if not isinstance(raw_path, str) or not raw_path.strip():
+            raise ToolExecutionError("list_directory requires a non-empty string path.")
+
+        requested_path = Path(raw_path)
+        resolved_roots = [root.resolve() for root in self.workspace_roots]
+
+        for root in resolved_roots:
+            if requested_path.is_absolute():
+                dir_path = requested_path.resolve()
+            else:
+                dir_path = (root / requested_path).resolve()
+
+            try:
+                dir_path.relative_to(root)
+            except ValueError:
+                continue
+
+            if not dir_path.exists():
+                raise ToolExecutionError(f"Directory does not exist: {raw_path}")
+            if not dir_path.is_dir():
+                raise ToolExecutionError(f"Path is not a directory: {raw_path}")
+
+            items = sorted(dir_path.iterdir())
+            lines = []
+            for item in items:
+                if item.is_dir():
+                    lines.append(f"📁 {item.name}/")
+                else:
+                    lines.append(f"📄 {item.name}")
+            return "\n".join(lines) if lines else "(empty directory)"
+
+        raise ToolExecutionError("list_directory can only access directories inside the workspace.")
 
 
 @dataclass
@@ -180,8 +239,11 @@ class WebSearchTool(Tool):
         return flattened
 
 
-def get_default_tools(workspace_root: Path) -> list[Tool]:
+def get_default_tools(workspace_roots: list[Path] | Path) -> list[Tool]:
+    if isinstance(workspace_roots, Path):
+        workspace_roots = [workspace_roots]
     return [
-        ReadFileTool(workspace_root=workspace_root),
+        ReadFileTool(workspace_roots=workspace_roots),
+        ListDirectoryTool(workspace_roots=workspace_roots),
         WebSearchTool(),
     ]

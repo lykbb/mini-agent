@@ -98,7 +98,7 @@ class ReadFileToolTests(unittest.TestCase):
             note = workspace / "note.txt"
             note.write_text("hello from test", encoding="utf-8")
 
-            tool = ReadFileTool(workspace)
+            tool = ReadFileTool([workspace])
 
             self.assertEqual(tool.run({"path": "note.txt"}), "hello from test")
 
@@ -109,7 +109,7 @@ class ReadFileToolTests(unittest.TestCase):
             outside = Path(temp_dir) / "outside.txt"
             outside.write_text("secret", encoding="utf-8")
 
-            tool = ReadFileTool(workspace)
+            tool = ReadFileTool([workspace])
 
             with self.assertRaises(ToolExecutionError):
                 tool.run({"path": "../outside.txt"})
@@ -234,7 +234,7 @@ class AgentLoopTests(unittest.TestCase):
 
     def test_agent_passes_tools_to_model(self) -> None:
         client = InspectingClient()
-        agent = Agent(client=client, tools=[ReadFileTool(Path.cwd())])
+        agent = Agent(client=client, tools=[ReadFileTool([Path.cwd()])])
 
         agent.run("hello")
 
@@ -245,7 +245,7 @@ class AgentLoopTests(unittest.TestCase):
             workspace = Path(temp_dir)
             (workspace / "note.txt").write_text("hello", encoding="utf-8")
             client = NativeToolCallingClient()
-            agent = Agent(client=client, tools=[ReadFileTool(workspace)])
+            agent = Agent(client=client, tools=[ReadFileTool([workspace])])
 
             answer = agent.run("Read note.txt and summarize it.")
 
@@ -263,7 +263,7 @@ class AgentLoopTests(unittest.TestCase):
             client = FakeClient()
             agent = Agent(
                 client=client,
-                tools=[ReadFileTool(workspace)],
+                tools=[ReadFileTool([workspace])],
             )
 
             answer = agent.run("Read note.txt and summarize it.")
@@ -280,7 +280,7 @@ class AgentLoopTests(unittest.TestCase):
             client = FakeClient()
             agent = Agent(
                 client=client,
-                tools=[ReadFileTool(workspace)],
+                tools=[ReadFileTool([workspace])],
                 require_approval=True,
                 approval_callback=lambda tool_call: False,
             )

@@ -12,6 +12,8 @@ from mini_agent_harness.tools import ToolExecutionError
 DEFAULT_SYSTEM_PROMPT = (
     "You are a helpful mini agent. Use the available tools when they are useful. "
     "The application will provide tool definitions through the model API. "
+    "IMPORTANT: Always use absolute paths (e.g. /Users/lyk/Project/test/README.md). "
+    "Use list_directory to explore folders, then read_file to read specific files. "
     "After a tool result is provided, answer the user clearly and concisely."
 )
 

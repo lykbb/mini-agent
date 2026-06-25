@@ -61,7 +61,8 @@ def build_agent(args: argparse.Namespace, settings=None) -> Agent:
     print(f"API key configured: {settings.has_api_key}")
 
     client = OpenAICompatibleClient(settings)
-    tools = get_default_tools(Path.cwd())
+    workspace_roots = [Path.cwd(), Path("/Users/lyk/Project/test")]
+    tools = get_default_tools(workspace_roots)
     return Agent(
         client=client,
         tools=tools,
